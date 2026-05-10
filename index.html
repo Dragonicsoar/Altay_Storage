@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Altay Storage | Güvenli Depolama</title>
+    <style>
+        :root {
+            --bg-color: #f4f4f9;
+            --text-color: #333;
+            --nav-bg: #ffffff;
+            --primary-gradient: linear-gradient(135deg, #d32f2f, #ff9800);
+            --secondary-color: #e0e0e0;
+            --card-bg: #ffffff;
+            --border-color: #ccc;
+            --danger-color: #dc3545;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #121212;
+            --text-color: #e0e0e0;
+            --nav-bg: #1e1e1e;
+            --primary-gradient: linear-gradient(135deg, #b71c1c, #f57c00);
+            --secondary-color: #333;
+            --card-bg: #1e1e1e;
+            --border-color: #444;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-color); transition: background 0.3s, color 0.3s; min-height: 100vh; }
+        
+        nav { display: flex; justify-content: space-between; align-items: center; padding: 15px 30px; background-color: var(--nav-bg); box-shadow: 0 2px 5px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 100; }
+        .logo { font-size: 1.8em; font-weight: bold; cursor: pointer; background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .nav-controls { display: flex; gap: 12px; align-items: center; }
+        
+        button { padding: 10px 18px; border: none; border-radius: 6px; cursor: pointer; background: var(--primary-gradient); color: white; font-weight: bold; transition: all 0.2s; }
+        button:hover { opacity: 0.9; transform: translateY(-1px); }
+        button:active { transform: scale(0.95); }
+        .btn-outline { background: transparent; border: 2px solid #d32f2f; color: #d32f2f; -webkit-text-fill-color: initial; }
+        [data-theme="dark"] .btn-outline { color: #ff9800; border-color: #ff9800; }
+        .btn-danger { background: var(--danger-color); color: white; }
+        
+        .view { display: none; padding: 30px; max-width: 1200px; margin: 0 auto; }
+        .view.active { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .form-container { background: var(--card-bg); padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-width: 450px; margin: 20px auto; border: 1px solid var(--border-color); }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 500; font-size: 0.9em; }
+        .form-group input:not([type="checkbox"]), .form-group textarea { width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-color); color: var(--text-color); outline: none; }
+        .form-group input:focus { border-color: #ff9800; }
+        
+        .checkbox-group { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 0.85em; cursor: pointer; }
+        .error-msg { color: var(--danger-color); font-size: 0.85em; display: none; margin-top: 10px; background: rgba(220, 53, 69, 0.1); padding: 8px; border-radius: 4px; }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-top: 20px; }
+        .card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-left: 5px solid #ff9800; position: relative; }
+        .card:hover { transform: translateY(-8px); box-shadow: 0 12px 20px rgba(0,0,0,0.15); }
+        .card-title { font-weight: bold; margin-bottom: 10px; font-size: 1.2em; color: var(--text-color); }
+        .card-meta { font-size: 0.85em; color: #777; margin-bottom: 5px; }
+
+        .media-preview { width: 100%; min-height: 300px; max-height: 600px; background: #000; display: flex; justify-content: center; align-items: center; border-radius: 12px; overflow: hidden; margin-bottom: 25px; border: 1px solid var(--border-color); }
+        .media-preview img, .media-preview video { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .file-info { background: var(--card-bg); padding: 25px; border-radius: 12px; border: 1px solid var(--border-color); }
+        
+        .admin-table { width: 100%; border-collapse: collapse; margin-top: 20px; background: var(--card-bg); border-radius: 8px; overflow: hidden; }
+        .admin-table th, .admin-table td { padding: 15px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        .admin-table th { background: var(--secondary-color); font-weight: 600; }
+
+        .hidden { display: none !important; }
+        .tab-controls { display: flex; justify-content: center; margin-bottom: 25px; gap: 15px; }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="logo" onclick="navigate('home')">Altay Storage</div>
+        <div class="nav-controls">
+            <span id="user-info" class="hidden" style="font-weight:600; font-size: 0.9em;"></span>
+            <button onclick="toggleTheme()" title="Temayı Değiştir">🌓</button>
+            <button id="nav-admin-btn" class="hidden" style="background: #444;" onclick="navigate('admin')">⚙️ Panel</button>
+            <button id="nav-add-btn" onclick="handleAddFileClick()">+ Dosya Ekle</button>
+            <button id="nav-login-btn" class="btn-outline" onclick="navigate('auth')">Giriş Yap</button>
+            <button id="nav-logout-btn" class="hidden btn-outline" onclick="logout()">Çıkış</button>
+        </div>
+    </nav>
+
+    <main>
+        <!-- Ana Sayfa -->
+        <section id="home-view" class="view active">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>📁 Dosya Havuzu</h2>
+                <small id="stats-summary" style="opacity: 0.7;"></small>
+            </div>
+            <div class="grid" id="file-grid"></div>
+        </section>
+
+        <!-- Admin Paneli -->
+        <section id="admin-view" class="view">
+            <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+                <h2>Yönetim Merkezi</h2>
+                <button class="btn-outline" onclick="navigate('home')">Geri</button>
+            </div>
+            <div class="grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 30px;">
+                <div class="card"><h3>Kullanıcılar</h3><h1 id="admin-user-count">0</h1></div>
+                <div class="card"><h3>Paylaşımlar</h3><h1 id="admin-file-count">0</h1></div>
+            </div>
+            <table class="admin-table">
+                <thead>
+                    <tr><th>Kullanıcı</th><th>E-posta</th><th>Rol</th><th>İşlem</th></tr>
+                </thead>
+                <tbody id="admin-user-list"></tbody>
+            </table>
+        </section>
+
+        <!-- Kimlik Doğrulama -->
+        <section id="auth-view" class="view">
+            <div class="tab-controls">
+                <button id="tab-lgn" onclick="switchAuthTab('login')">Giriş</button>
+                <button id="tab-reg" class="btn-outline" onclick="switchAuthTab('register')">Kayıt</button>
+            </div>
+
+            <div id="login-form" class="form-container">
+                <h3 style="text-align: center;">Tekrar Hoş Geldiniz</h3><br>
+                <div class="form-group">
+                    <label>E-posta veya Kullanıcı Adı</label>
+                    <input type="text" id="login-identifier" placeholder="Kullanıcı adınız...">
+                </div>
+                <div class="form-group">
+                    <label>Şifre</label>
+                    <input type="password" id="login-pass">
+                </div>
+                <label class="checkbox-group"><input type="checkbox" onchange="togglePassword('login-pass', this)"> Şifreyi Göster</label>
+                <label class="checkbox-group"><input type="checkbox" id="login-remember"> Oturumu Açık Tut</label>
+                <p id="login-error" class="error-msg">Bilgiler hatalı, lütfen kontrol edin.</p>
+                <button style="width: 100%; margin-top: 15px;" onclick="login()">Sisteme Gir</button>
+            </div>
+
+            <div id="register-form" class="form-container hidden">
+                <h3 style="text-align: center;">Hesap Oluştur</h3><br>
+                <div class="form-group">
+                    <label>Kullanıcı Adı</label>
+                    <input type="text" id="reg-name">
+                </div>
+                <div class="form-group">
+                    <label>E-posta</label>
+                    <input type="email" id="reg-email">
+                </div>
+                <div class="form-group">
+                    <label>Şifre (Min. 4 Karakter, Harf + Rakam)</label>
+                    <input type="password" id="reg-pass">
+                </div>
+                <div class="form-group">
+                    <label>Şifre Tekrar</label>
+                    <input type="password" id="reg-pass-confirm">
+                </div>
+                <p id="reg-error" class="error-msg"></p>
+                <button style="width: 100%; margin-top: 15px;" onclick="register()">Kaydı Tamamla</button>
+            </div>
+        </section>
+
+        <!-- Yükleme Ekranı -->
+        <section id="upload-view" class="view">
+            <div class="form-container" style="max-width: 600px;">
+                <h2>Buluta Yükle</h2><br>
+                <div class="form-group">
+                    <label>Paylaşım Başlığı</label>
+                    <input type="text" id="upload-title" placeholder="Örn: Proje Taslakları">
+                </div>
+                <div class="form-group">
+                    <label>Açıklama (Opsiyonel)</label>
+                    <textarea id="upload-desc" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Dosyalar</label>
+                    <input type="file" id="upload-files" multiple>
+                </div>
+                <div class="form-group">
+                    <label>Klasör Seç (Opsiyonel)</label>
+                    <input type="file" id="upload-folder" webkitdirectory directory multiple>
+                </div>
+                <div id="upload-status" style="margin-bottom:10px; font-size:0.8em; color:orange;"></div>
+                <button id="upload-btn" style="width: 100%;" onclick="processUpload()">Yüklemeyi Başlat</button>
+            </div>
+        </section>
+
+        <!-- Detay Ekranı -->
+        <section id="details-view" class="view">
+            <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <button class="btn-outline" onclick="navigate('home')">← Geri</button>
+                <div id="details-actions"></div>
+            </div>
+            
+            <h2 id="detail-title">...</h2>
+            <div style="margin: 10px 0 20px 0; font-size: 0.9em;">
+                <span id="detail-uploader" style="color: #ff9800; font-weight: bold;"></span> • 
+                <span id="detail-date" style="opacity: 0.7;"></span>
+            </div>
+            
+            <div class="media-preview" id="media-preview-container"></div>
+
+            <div class="file-info">
+                <h3>Açıklama</h3>
+                <p id="detail-desc" style="margin-top: 10px; line-height: 1.6;"></p>
+                <div id="album-section" class="hidden">
+                    <h3 style="margin-top: 25px; border-bottom: 2px solid #ff9800; padding-bottom: 8px;">Dosya Listesi (<span id="file-count-label"></span>)</h3>
+                    <div id="album-files-list" style="margin-top: 10px;"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Veritabanı Başlatma
+        let users = JSON.parse(localStorage.getItem('altay_users')) || [];
+        let files = JSON.parse(localStorage.getItem('altay_files')) || [];
+        let currentUser = JSON.parse(localStorage.getItem('altay_currentUser')) || JSON.parse(sessionStorage.getItem('altay_currentUser')) || null;
+
+        const saveUsers = () => localStorage.setItem('altay_users', JSON.stringify(users));
+        const saveFiles = () => localStorage.setItem('altay_files', JSON.stringify(files));
+        const generateId = () => 'altay_' + Math.random().toString(36).substr(2, 9);
+
+        // Navigasyon ve UI Kontrolü
+        function navigate(viewId) {
+            document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+            document.getElementById(`${viewId}-view`).classList.add('active');
+            window.scrollTo(0,0);
+            
+            if (viewId === 'home') renderHome();
+            if (viewId === 'admin') renderAdmin();
+            updateNav();
+        }
+
+        function updateNav() {
+            const ui = {
+                login: document.getElementById('nav-login-btn'),
+                logout: document.getElementById('nav-logout-btn'),
+                info: document.getElementById('user-info'),
+                admin: document.getElementById('nav-admin-btn')
+            };
+
+            if (currentUser) {
+                ui.login.classList.add('hidden');
+                ui.logout.classList.remove('hidden');
+                ui.info.classList.remove('hidden');
+                ui.info.textContent = `👤 ${currentUser.name}`;
+                currentUser.isAdmin ? ui.admin.classList.remove('hidden') : ui.admin.classList.add('hidden');
+            } else {
+                ui.login.classList.remove('hidden');
+                ui.logout.classList.add('hidden');
+                ui.info.classList.add('hidden');
+                ui.admin.classList.add('hidden');
+            }
+        }
+
+        function toggleTheme() {
+            const body = document.body;
+            const current = body.getAttribute('data-theme');
+            const target = current === 'dark' ? 'light' : 'dark';
+            body.setAttribute('data-theme', target);
+            localStorage.setItem('altay_theme', target);
+        }
+
+        if (localStorage.getItem('altay_theme') === 'dark') document.body.setAttribute('data-theme', 'dark');
+
+        function switchAuthTab(tab) {
+            const isLogin = tab === 'login';
+            document.getElementById('login-form').classList.toggle('hidden', !isLogin);
+            document.getElementById('register-form').classList.toggle('hidden', isLogin);
+            document.getElementById('tab-lgn').className = isLogin ? '' : 'btn-outline';
+            document.getElementById('tab-reg').className = isLogin ? 'btn-outline' : '';
+        }
+
+        function togglePassword(id, cb) {
+            document.getElementById(id).type = cb.checked ? 'text' : 'password';
+        }
+
+        // Auth Fonksiyonları
+        function register() {
+            const name = document.getElementById('reg-name').value.trim();
+            const email = document.getElementById('reg-email').value.trim();
+            const pass = document.getElementById('reg-pass').value;
+            const confirm = document.getElementById('reg-pass-confirm').value;
+            const errorEl = document.getElementById('reg-error');
+
+            const passRegex = /^(?=.*[A-Za-z])(?=.*\d).{4,}$/;
+
+            if (!name || !email || !pass) {
+                errorEl.textContent = "Boş alan bırakmayınız.";
+                errorEl.style.display = 'block';
+                return;
+            }
+            if (!passRegex.test(pass)) {
+                errorEl.textContent = "Şifre en az 4 karakter olmalı, harf ve rakam içermelidir.";
+                errorEl.style.display = 'block';
+                return;
+            }
+            if (pass !== confirm) {
+                errorEl.textContent = "Şifreler uyuşmuyor.";
+                errorEl.style.display = 'block';
+                return;
+            }
+            if (users.find(u => u.email === email || u.name === name)) {
+                errorEl.textContent = "Bu kullanıcı zaten mevcut.";
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            const newUser = { id: generateId(), name, email, pass, isAdmin: (users.length === 0) };
+            users.push(newUser);
+            saveUsers();
+            currentUser = newUser;
+            sessionStorage.setItem('altay_currentUser', JSON.stringify(newUser));
+            navigate('home');
+        }
+
+        function login() {
+            const iden = document.getElementById('login-identifier').value.trim();
+            const pass = document.getElementById('login-pass').value;
+            const remember = document.getElementById('login-remember').checked;
+            
+            const user = users.find(u => (u.email === iden || u.name === iden) && u.pass === pass);
+            
+            if (user) {
+                currentUser = user;
+                const storage = remember ? localStorage : sessionStorage;
+                storage.setItem('altay_currentUser', JSON.stringify(user));
+                navigate('home');
+                document.getElementById('login-error').style.display = 'none';
+            } else {
+                document.getElementById('login-error').style.display = 'block';
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            localStorage.removeItem('altay_currentUser');
+            sessionStorage.removeItem('altay_currentUser');
+            navigate('home');
+        }
+
+        function handleAddFileClick() {
+            currentUser ? navigate('upload') : navigate('auth');
+        }
+
+        // Dosya İşlemleri
+        async function processUpload() {
+            const title = document.getElementById('upload-title').value.trim() || 'Yeni Paylaşım';
+            const desc = document.getElementById('upload-desc').value;
+            const filesInp = document.getElementById('upload-files').files;
+            const folderInp = document.getElementById('upload-folder').files;
+            const allFiles = [...filesInp, ...folderInp];
+            const btn = document.getElementById('upload-btn');
+            const status = document.getElementById('upload-status');
+
+            if (allFiles.length === 0) return alert("Dosya seçiniz.");
+            
+            btn.disabled = true;
+            btn.textContent = "İşleniyor...";
+
+            try {
+                let items = [];
+                for (let f of allFiles) {
+                    status.textContent = `${f.name} okunuyor...`;
+                    const base64 = await new Promise(r => {
+                        const rd = new FileReader();
+                        rd.onload = () => r(rd.result);
+                        rd.readAsDataURL(f);
+                    });
+                    items.push({
+                        name: f.webkitRelativePath || f.name,
+                        type: f.type || 'application/octet-stream',
+                        data: base64
+                    });
+                }
+
+                files.push({
+                    id: generateId(),
+                    title, desc,
+                    uploader: currentUser.name,
+                    uploaderId: currentUser.id,
+                    date: new Date().toLocaleString('tr-TR'),
+                    items,
+                    isAlbum: items.length > 1
+                });
+
+                saveFiles();
+                navigate('home');
+                // Formu temizle
+                document.getElementById('upload-title').value = '';
+                document.getElementById('upload-desc').value = '';
+                document.getElementById('upload-files').value = '';
+                document.getElementById('upload-folder').value = '';
+            } catch (e) {
+                alert("Yükleme sırasında hata oluştu.");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Yüklemeyi Başlat";
+                status.textContent = "";
+            }
+        }
+
+        function renderHome() {
+            const grid = document.getElementById('file-grid');
+            grid.innerHTML = '';
+            document.getElementById('stats-summary').textContent = `${files.length} paylaşım mevcut`;
+
+            if (files.length === 0) {
+                grid.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding:50px; opacity:0.5;"><h3>Henüz bir şey yok...</h3><p>İlk dosyayı sen yükle!</p></div>';
+                return;
+            }
+
+            [...files].reverse().forEach(post => {
+                const div = document.createElement('div');
+                div.className = 'card';
+                div.innerHTML = `
+                    <div class="card-title">${post.title}</div>
+                    <div class="card-meta">${post.isAlbum ? '📁 Klasör/Albüm' : '📄 Tek Dosya'} • ${post.items.length} Öğe</div>
+                    <div class="card-meta" style="margin-top:12px; color: #ff9800;"><strong>${post.uploader}</strong> paylaştı</div>
+                `;
+                div.onclick = () => showDetails(post.id);
+                grid.appendChild(div);
+            });
+        }
+
+        function showDetails(id) {
+            const post = files.find(f => f.id === id);
+            if (!post) return;
+
+            document.getElementById('detail-title').textContent = post.title;
+            document.getElementById('detail-uploader').textContent = post.uploader;
+            document.getElementById('detail-date').textContent = post.date;
+            document.getElementById('detail-desc').textContent = post.desc || 'Açıklama belirtilmemiş.';
+
+            const actions = document.getElementById('details-actions');
+            actions.innerHTML = `<button onclick="downloadAll('${post.id}')">📥 Tümünü İndir</button>`;
+
+            if (currentUser && (currentUser.isAdmin || currentUser.id === post.uploaderId)) {
+                actions.innerHTML += `<button class="btn-danger" style="margin-left:10px;" onclick="deletePost('${post.id}')">🗑️ Sil</button>`;
+            }
+
+            renderPreview(post.items[0]);
+
+            const albumSec = document.getElementById('album-section');
+            const list = document.getElementById('album-files-list');
+            list.innerHTML = '';
+            
+            if (post.items.length > 1) {
+                albumSec.classList.remove('hidden');
+                document.getElementById('file-count-label').textContent = post.items.length;
+                post.items.forEach((item, idx) => {
+                    const row = document.createElement('div');
+                    row.style = 'padding:12px; border-bottom:1px solid var(--border-color); cursor:pointer; display:flex; justify-content:space-between; align-items:center;';
+                    row.innerHTML = `<span>${idx + 1}. ${item.name}</span> <button class="btn-outline" style="padding:4px 10px; font-size:0.8em;">Görüntüle</button>`;
+                    row.onclick = (e) => { e.stopPropagation(); renderPreview(item); };
+                    list.appendChild(row);
+                });
+            } else {
+                albumSec.classList.add('hidden');
+            }
+
+            navigate('details');
+        }
+
+        function renderPreview(item) {
+            const container = document.getElementById('media-preview-container');
+            const type = item.type.toLowerCase();
+            if (type.includes('image')) container.innerHTML = `<img src="${item.data}">`;
+            else if (type.includes('video')) container.innerHTML = `<video src="${item.data}" controls></video>`;
+            else container.innerHTML = `<div style="text-align:center;"><h1>📄</h1><p>${item.name}<br><small>Önizleme desteklenmiyor</small></p></div>`;
+        }
+
+        function downloadAll(id) {
+            const post = files.find(f => f.id === id);
+            post.items.forEach((it, i) => {
+                setTimeout(() => {
+                    const a = document.createElement('a');
+                    a.href = it.data;
+                    a.download = it.name.split('/').pop();
+                    a.click();
+                }, i * 400);
+            });
+        }
+
+        function deletePost(id) {
+            if(confirm("Bu paylaşımı kalıcı olarak silmek istediğinize emin misiniz?")) {
+                files = files.filter(f => f.id !== id);
+                saveFiles();
+                navigate('home');
+            }
+        }
+
+        // Admin Fonksiyonları
+        function renderAdmin() {
+            if (!currentUser || !currentUser.isAdmin) return navigate('home');
+            
+            document.getElementById('admin-user-count').textContent = users.length;
+            document.getElementById('admin-file-count').textContent = files.length;
+            
+            const list = document.getElementById('admin-user-list');
+            list.innerHTML = '';
+            
+            users.forEach(u => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${u.name}</td>
+                    <td>${u.email}</td>
+                    <td>${u.isAdmin ? '⭐ Admin' : 'Üye'}</td>
+                    <td>${u.id !== currentUser.id ? `<button class="btn-danger" onclick="deleteUser('${u.id}')">Sil</button>` : '-'}</td>
+                `;
+                list.appendChild(tr);
+            });
+        }
+
+        function deleteUser(id) {
+            if(confirm("Kullanıcı ve tüm verileri silinsin mi?")) {
+                users = users.filter(u => u.id !== id);
+                files = files.filter(f => f.uploaderId !== id);
+                saveUsers(); saveFiles();
+                renderAdmin();
+            }
+        }
+
+        // Başlangıç
+        updateNav();
+        renderHome();
+    </script>
+</body>
+</html>
